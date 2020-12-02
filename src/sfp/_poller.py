@@ -93,9 +93,12 @@ class Poller(object):
         :type progress: bool
         :param output_timestamp: whether to print a timestamp in the log messages
         :type output_timestamp: bool
-        :param check_file:
-        :param process_file:
-        :param logging:
+        :param check_file: the method to call for checking the files for validity
+        :type check_file: object
+        :param process_file: the method to call for processing a file
+        :type process_file: object
+        :param logging: the method to use for logging
+        :type logging: object
         """
 
         self.input_dir = input_dir
