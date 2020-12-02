@@ -47,6 +47,16 @@ automatically moved into the actual `output_dir`. That avoids other processes th
 are monitoring or polling for files in the output directory to spring into action
 before the files have been fully written. 
 
+The input directory may contain more than one file per ID (but with differing file
+extensions) and if these should get moved to the output directory, then this can
+be achieved with the `other_input_files` [glob](https://docs.python.org/3/library/glob.html) 
+definition. The `{NAME}` placeholder, representing the current file being processed
+(without its extension), can be used in that expression. For example, when processing
+all `.jpg` files with the `process_file` method and all `.txt` and `.xml` should get
+moved as well then use `["{NAME}.txt", "{NAME}.xml]` for `other_input_files`. If you
+want to delete these files instead of moving them, then set `delete_other_input_files` 
+to `True`. 
+
 ## Custom file check
 
 The following example looks for JPG and PNG files in `/home/fracpete/poll/in/` and will

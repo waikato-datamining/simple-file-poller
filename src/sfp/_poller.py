@@ -1,8 +1,13 @@
+import glob
 import os
 import traceback
 from typing import Callable, List
 from datetime import datetime
 from time import sleep
+
+
+GLOB_NAME_PLACEHOLDER = "{NAME}"
+""" The glob placeholder for identifying other input files. """
 
 
 def dummy_file_check(fname, poller):
@@ -65,8 +70,9 @@ class Poller(object):
     """
 
     def __init__(self, input_dir=None, output_dir=None, tmp_dir=None, delete_input=False, continuous=False,
-                 max_files=-1, extensions=None, blacklist_tries=3, poll_wait=1, verbose=False, progress=True,
-                 output_timestamp=True, check_file=None, process_file=None, logging=simple_logging):
+                 max_files=-1, extensions=None, other_input_files=None, delete_other_input_files=False,
+                 blacklist_tries=3, poll_wait=1, verbose=False, progress=True, output_timestamp=True,
+                 check_file=None, process_file=None, logging=simple_logging):
         """
 
         :param input_dir: The directory to poll for files to process.
@@ -83,6 +89,10 @@ class Poller(object):
         :type max_files: int
         :param extensions: The list of extensions (lower case, with dots) to restrict the polling to, use None for accepting all files.
         :type extensions: list
+        :param other_input_files: the glob expression for identifying other input files (replaces the {NAME} placeholder with the current name excl extension), None to not identify
+        :type other_input_files: list
+        :param delete_other_input_files: whether to delete the other input files identified via other_input_files or just move them to the output directory
+        :type delete_other_input_files: bool
         :param blacklist_tries: The number of checks a file needs to fail before ending up in the black list of files to ignore when polling.
         :type blacklist_tries: int
         :param poll_wait: The number of seconds to wait between polls (when no files were processed).
@@ -108,6 +118,8 @@ class Poller(object):
         self.continuous = continuous
         self.max_files = max_files
         self.extensions = extensions
+        self.other_input_files = other_input_files
+        self.delete_other_input_files = delete_other_input_files
         self.blacklist_tries = blacklist_tries
         self.poll_wait = poll_wait
         self.verbose = verbose
@@ -357,12 +369,26 @@ class Poller(object):
                         else:
                             self.process_file(file_path, self.output_dir, self)
 
+                    # input file
                     if self.delete_input:
                         self.debug("Deleting input: %s" % file_path)
                         os.remove(file_path)
                     else:
                         self.debug("Moving input %s to %s" % (file_path, self.output_dir))
                         os.rename(file_path, os.path.join(self.output_dir, os.path.basename(file_path)))
+
+                    # other input files?
+                    if self.other_input_files is not None:
+                        for other_input_file in self.other_input_files:
+                            other_files = glob.glob(os.path.join(self.input_dir, other_input_file.replace(GLOB_NAME_PLACEHOLDER, os.path.splitext(file_path)[0])))
+                            for other_file in other_files:
+                                other_path = os.path.join(self.input_dir, other_file)
+                                if self.delete_other_input_files:
+                                    self.debug("Deleting other input: %s" % other_path)
+                                    os.remove(other_path)
+                                else:
+                                    self.debug("Moving other input %s to %s" % (other_path, self.output_dir))
+                                    os.rename(other_path, os.path.join(self.output_dir, os.path.basename(other_path)))
                 except KeyboardInterrupt:
                     self._stopped = True
                     self.log("Interrupted, exiting")
