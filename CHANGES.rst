@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.0.3 (2020-12-04)
+------------------
+
+- `poll` method now skips directories, which could be listed if no extensions are supplied to restrict the polling.
+
+
 0.0.2 (2020-12-03)
 ------------------
 
