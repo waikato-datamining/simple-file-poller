@@ -291,6 +291,9 @@ class Poller(object):
 
                 file_path = os.path.join(self.input_dir, file_name)
 
+                if os.path.isdir(file_path):
+                    continue
+
                 # monitored extension?
                 if self.extensions is not None:
                     ext_lower = os.path.splitext(file_name)[1]
