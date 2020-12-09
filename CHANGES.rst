@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.0.4 (2020-12-10)
+------------------
+
+- added support for using watchdog for reacting to file creation events, speeding up polling
+
+
 0.0.3 (2020-12-04)
 ------------------
 

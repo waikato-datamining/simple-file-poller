@@ -1,5 +1,5 @@
 # simple-file-poller
-Simple Python framework for performing file polling.
+Simple Python 3 library for file polling.
 
 ## Installation
 
@@ -15,6 +15,21 @@ The `sfp.Poller` class is used to poll for files to process.
 
 As a minimum, the `input_dir` and `output_dir` directories need to 
 get supplied.
+
+You can choose between two types of polling: *simple* (default) or 
+*[watchdog](https://github.com/gorakhargosh/watchdog)-based* one 
+(`use_watchdog = True`). The simple approach merely checks the input 
+directory every `poll_wait` seconds for new files. The watchdog 
+approach reacts to *FILE_CREATED* events in the input directory 
+to trigger the listing of files. The watchdog approach should be 
+used in order to reduce latency within a pipeline of file-processing 
+applications. Due to potential race conditions (e.g., when pairs of 
+files need to be processed but the second appears slightly after the 
+first one triggered the event already), some files may not get 
+listed/processed. Hence, the poller will check in watchdog mode every 
+`watchdog_check_interval` seconds whether there are not any files 
+present in the input directory after all. Of course, watchdog mode 
+is only available in conjunction with `continuous` mode.
 
 By default, input files get moved to the output directory once process. 
 With the `delete_input` option, you can remove them instead (e.g., if 

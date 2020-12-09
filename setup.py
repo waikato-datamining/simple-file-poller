@@ -17,7 +17,7 @@ def _read(f):
 
 setup(
     name="simple-file-poller",
-    description="Simple Python3 library for file polling.",
+    description="Simple Python 3 library for file polling.",
     long_description=(
         _read('DESCRIPTION.rst') + b'\n' +
         _read('CHANGES.rst')).decode('utf-8'),
@@ -35,7 +35,10 @@ setup(
     packages=[
         "sfp",
     ],
-    version="0.0.3",
+    install_requires=[
+        "watchdog",
+    ],
+    version="0.0.4",
     author='Peter Reutemann',
     author_email='fracpete@waikato.ac.nz',
 )
