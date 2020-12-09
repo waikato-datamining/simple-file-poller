@@ -1,6 +1,14 @@
 Changelog
 =========
 
+0.0.5 (2020-12-10)
+------------------
+
+- added `params` object to allow attaching of arbitrary parameters to be used by the `check_file`
+  and `process_file` methods; this avoids accidentally overriding Poller attributes that were
+  introduced in later versions.
+
+
 0.0.4 (2020-12-10)
 ------------------
 

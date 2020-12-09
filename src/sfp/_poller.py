@@ -97,6 +97,13 @@ class FileCreatedHandler(FileSystemEventHandler):
                 self.poller.process_files(file_list)
 
 
+class Parameters(object):
+    """
+    Dummy class that we abuse for storing custom parameters for the check_file and process_file methods.
+    """
+    pass
+
+
 class Poller(object):
     """"
     Simple poller class that polls an input directory for files for processing and moves them (or deletes them)
@@ -108,7 +115,7 @@ class Poller(object):
                  max_files=-1, extensions=None, other_input_files=None, delete_other_input_files=False,
                  blacklist_tries=3, poll_wait=1, use_watchdog=False, watchdog_check_interval=10,
                  verbose=False, progress=True, output_timestamp=True,
-                 check_file=None, process_file=None, logging=simple_logging):
+                 check_file=None, process_file=None, logging=simple_logging, params=Parameters()):
         """
 
         :param input_dir: The directory to poll for files to process.
@@ -149,6 +156,8 @@ class Poller(object):
         :type process_file: object
         :param logging: the method to use for logging
         :type logging: object
+        :param params: the object for encapsulating additional parameters for the check_file/process_file methods
+        :type params: Parameters
         """
 
         self.input_dir = input_dir
@@ -171,6 +180,7 @@ class Poller(object):
         self.process_file = process_file
         self.logging = logging
         self.is_listing_files = False
+        self.params = params
         self._blacklist = dict()
         self._observer = None
         self._event_handler = None

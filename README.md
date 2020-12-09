@@ -72,22 +72,37 @@ moved as well then use `["{NAME}.txt", "{NAME}.xml]` for `other_input_files`. If
 want to delete these files instead of moving them, then set `delete_other_input_files` 
 to `True`. 
 
+The `params` object can be used to attach parameters that are used by the 
+`check_file` and `process_file` methods. By setting attributes in this
+object you avoid the danger of accidentally replacing attributes that
+were introduced in the Poller class at a later stage.
+
 ## Custom file check
 
 The following example looks for JPG and PNG files in `/home/fracpete/poll/in/` and will
 write dummy output files to the temp directory `/home/fracpete/poll/tmp/` before
 moving them to `/home/fracpete/poll/tmp/`. A maximum of 3 files is processed at 
 a time. It uses a custom check method to ensure that the images have been completely
-written to disk before attempting to process them 
+written to disk before attempting to process them. Though PNG and JPG images
+get processed, only JPG images get checked (`poller.params.dont_check_ext`).
 
 ```python
-from sfp import Poller, dummy_file_processing
+import os
+from sfp import Poller, Parameters, dummy_file_processing
 from image_complete.auto import is_image_complete
 
 def image_complete(fname, poller):
-    result = is_image_complete(fname)
+    ext = os.path.splitext(fname)[1]
+    if ext in poller.params.dont_check_ext:
+        poller.debug("Not checking extension: %s" % ext)
+        result = True
+    else:
+        result = is_image_complete(fname)
     poller.debug("Image complete:", fname, "->", result)
     return result
+
+params = Parameters()
+params.dont_check_ext = [".png"]
 
 p = Poller(
     input_dir="/home/fracpete/poll/in/",
@@ -97,7 +112,8 @@ p = Poller(
     max_files=3,
     check_file=image_complete,
     process_file=dummy_file_processing,
-    extensions=[".jpg", ".png"])
+    extensions=[".jpg", ".png"],
+    params=params)
 p.poll()
 print("Stopped?", p.is_stopped())
 ```
