@@ -92,15 +92,19 @@ class FileCreatedHandler(FileSystemEventHandler):
         :param event: the event
         """
         self.poller.debug("File created...")
+        first = True
         while self.poller.is_busy:
-            self.poller.debug("Poller busy, waiting...")
-            sleep(1)
+            if first:
+                first = False
+                self.poller.debug("Poller busy, waiting...")
+            sleep(0.1)
         maybe_more_files = True
         while maybe_more_files:
             file_list = self.poller.list_files()
-            if len(file_list) < self.poller.max_files:
+            num_files = len(file_list)
+            if (num_files == 0) or (num_files < self.poller.max_files):
                 maybe_more_files = False
-            if len(file_list) > 0:
+            if num_files > 0:
                 self.poller.process_files(file_list)
 
 
@@ -120,7 +124,7 @@ class Poller(object):
 
     def __init__(self, input_dir=None, output_dir=None, tmp_dir=None, delete_input=False, continuous=False,
                  max_files=-1, extensions=None, other_input_files=None, delete_other_input_files=False,
-                 blacklist_tries=3, poll_wait=1, use_watchdog=False, watchdog_check_interval=10,
+                 blacklist_tries=3, poll_wait=1.0, use_watchdog=False, watchdog_check_interval=10.0,
                  verbose=False, progress=True, output_timestamp=True,
                  check_file=None, process_file=None, logging=simple_logging, params=Parameters()):
         """
@@ -146,11 +150,11 @@ class Poller(object):
         :param blacklist_tries: The number of checks a file needs to fail before ending up in the black list of files to ignore when polling.
         :type blacklist_tries: int
         :param poll_wait: The number of seconds to wait between polls (when no files were processed).
-        :type poll_wait: int
+        :type poll_wait: float
         :param use_watchdog: Whether to use time-based polling of watchdog.
         :type use_watchdog: bool
         :param watchdog_check_interval: the interval in seconds to perform a simple poll, in case a file creation event got missed
-        :type watchdog_check_interval: int
+        :type watchdog_check_interval: float
         :param verbose: Whether to be more verbose with the logging output.
         :type verbose: bool
         :param progress: Whether to output progress information on the files being processed.
@@ -560,25 +564,30 @@ class Poller(object):
         self._observer.schedule(self._event_handler, self.input_dir)
         self._observer.start()
         try:
-            count = 0
+            count = 0.0
             while True:
-                if (count == 0) or (count == self.watchdog_check_interval):
+                if (count == 0) or (count >= self.watchdog_check_interval):
                     if count == 0:
                         self.info("Initial check")
                     else:
                         self.info("Watchdog check interval reached")
-                    count = 0
+                    count = 0.0
                     maybe_more_files = True
                     while maybe_more_files:
+                        first = True
                         while self.is_busy:
-                            sleep(1)
+                            if first:
+                                first = False
+                                self.debug("Poller busy, waiting...")
+                            sleep(0.1)
                         file_list = self.list_files()
-                        if len(file_list) < self.max_files:
+                        num_files = len(file_list)
+                        if (num_files == 0) or (num_files < self.max_files):
                             maybe_more_files = False
-                        if len(file_list) > 0:
+                        if num_files > 0:
                             self.process_files(file_list)
-                count += 1
-                sleep(1)
+                count += 0.1
+                sleep(0.1)
         finally:
             self._observer.stop()
             self._observer.join()

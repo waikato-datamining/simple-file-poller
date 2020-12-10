@@ -1,6 +1,14 @@
 Changelog
 =========
 
+0.0.8 (2020-12-11)
+------------------
+
+- fixed high CPU usage (ie constant polling) when using unlimited files to list (`max_files=0`)
+- `poll_wait` and `watchdog_check_interval` are now float instead of int to allow for sub-second poll waits
+- internal delays when poller is busy have been dropped from 1s to 0.1s
+
+
 0.0.7 (2020-12-10)
 ------------------
 
