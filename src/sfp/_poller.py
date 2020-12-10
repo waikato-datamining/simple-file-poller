@@ -55,10 +55,17 @@ def dummy_file_processing(fname, output_dir, poller):
     return result
 
 
-def simple_logging(*args):
+LOGGING_TYPE_INFO = 1
+LOGGING_TYPE_DEBUG = 2
+LOGGING_TYPE_ERROR = 3
+
+
+def simple_logging(type, *args):
     """
     Just uses the print method to output the arguments.
 
+    :param type: the message type
+    :type type: int
     :param args: the arguments to output
     """
     print(*args)
@@ -85,7 +92,7 @@ class FileCreatedHandler(FileSystemEventHandler):
         :param event: the event
         """
         self.poller.debug("File created...")
-        while self.poller.is_listing_files:
+        while self.poller.is_busy:
             self.poller.debug("Poller busy, waiting...")
             sleep(1)
         maybe_more_files = True
@@ -180,6 +187,7 @@ class Poller(object):
         self.process_file = process_file
         self.logging = logging
         self.is_listing_files = False
+        self.is_processing_files = False
         self.params = params
         self._blacklist = dict()
         self._observer = None
@@ -246,6 +254,81 @@ class Poller(object):
         """
         self._process_file = fn
 
+    def debug(self, *args):
+        """
+        Outputs the arguments via 'log' if verbose is enabled.
+
+        :param args: the debug arguments to output
+        """
+        if self.verbose:
+            self._log(LOGGING_TYPE_DEBUG, *args)
+
+    def info(self, *args):
+        """
+        Outputs the arguments via 'log' if progress is enabled.
+
+        :param args: the info arguments to output
+        """
+        if self.progress:
+            self._log(LOGGING_TYPE_INFO, *args)
+
+    def error(self, *args):
+        """
+        Outputs the arguments via 'log'.
+
+        :param args: the error arguments to output
+        """
+        self._log(LOGGING_TYPE_ERROR, *args)
+
+    def _log(self, type, *args):
+        """
+        Outputs the arguments via the logging function.
+
+        :param args: the arguments to output
+        """
+        if self._logging is not None:
+            if self.output_timestamp:
+                self._logging(type, *("%s - " % str(datetime.now()), *args))
+            else:
+                self._logging(type, *args)
+
+    def _keyboard_interrupt(self):
+        """
+        Prints an error message and stops the polling.
+        """
+        self.error("Interrupted, exiting")
+        self.stop()
+
+    def stop(self):
+        """
+        Stops the polling. Can be used by the check/processing methods in case of a fatal error.
+        """
+        self._stopped = True
+        if self._observer is not None:
+            self._observer.stop()
+        self.is_processing_files = False
+        self.is_listing_files = False
+
+    @property
+    def is_stopped(self):
+        """
+        Returns whether the polling got stopped, e.g., interrupted by the user.
+
+        :return: whether it was stopped
+        :rtype: bool
+        """
+        return self._stopped
+
+    @property
+    def is_busy(self):
+        """
+        Returns whether the poller is busy with I/O.
+
+        :return: True if listing or processing files
+        :rtype: bool
+        """
+        return self.is_listing_files or self.is_processing_files
+
     def _check(self):
         """
         For performing checks before starting the polling.
@@ -284,44 +367,6 @@ class Poller(object):
         if self.use_watchdog and not self.continuous:
             raise Exception("Watchdog only available in continuous mode!")
 
-    def debug(self, *args):
-        """
-        Outputs the arguments via 'log' if verbose is enabled.
-
-        :param args: the debug arguments to output
-        """
-        if self.verbose:
-            self.log(*args)
-
-    def log(self, *args):
-        """
-        Outputs the arguments via the logging function.
-
-        :param args: the arguments to output
-        """
-        if self._logging is not None:
-            if self.output_timestamp:
-                self._logging(*("%s - " % str(datetime.now()), *args))
-            else:
-                self._logging(*args)
-
-    def stop(self):
-        """
-        Stops the polling. Can be used by the check/processing methods in case of a fatal error.
-        """
-        if self._observer is not None:
-            self._observer.stop()
-        self._stopped = True
-
-    def is_stopped(self):
-        """
-        Returns whether the polling got stopped, e.g., interrupted by the user.
-
-        :return: whether it was stopped
-        :rtype: bool
-        """
-        return self._stopped
-
     def list_files(self):
         """
         Generates the list of files.
@@ -330,69 +375,85 @@ class Poller(object):
         :rtype: List[str]
         """
 
-        file_list = []
+        if self.is_stopped:
+            return
+
         self.is_listing_files = True
+        file_list = []
         self.debug("Start listing files: %s" % self.input_dir)
-        for file_name in os.listdir(self.input_dir):
-            if self.is_stopped():
-                self.log("Stopped")
-                return
 
-            file_path = os.path.join(self.input_dir, file_name)
+        try:
+            for file_name in os.listdir(self.input_dir):
+                if self.is_stopped:
+                    self.info("Stopped")
+                    return
 
-            if os.path.isdir(file_path):
-                continue
+                file_path = os.path.join(self.input_dir, file_name)
 
-            # monitored extension?
-            if self.extensions is not None:
-                ext_lower = os.path.splitext(file_name)[1]
-                if ext_lower not in self.extensions:
-                    self.debug("%s does not match extensions: %s" % (file_name, str(self.extensions)))
+                if os.path.isdir(file_path):
                     continue
 
-            # file OK?
-            if self.check_file is not None:
-                ok = self.check_file(file_path, self)
-                if ok:
-                    # remove file from blacklist if it could be processed now
-                    if file_path in self._blacklist:
-                        del self._blacklist[file_path]
-                    file_list.append(file_path)
-                else:
-                    if not file_path in self._blacklist:
-                        self._blacklist[file_path] = 1
+                # monitored extension?
+                if self.extensions is not None:
+                    ext_lower = os.path.splitext(file_name)[1]
+                    if ext_lower not in self.extensions:
+                        self.debug("%s does not match extensions: %s" % (file_name, str(self.extensions)))
+                        continue
+
+                # file OK?
+                if self.check_file is not None:
+                    ok = self.check_file(file_path, self)
+                    if ok:
+                        # remove file from blacklist if it could be processed now
+                        if file_path in self._blacklist:
+                            del self._blacklist[file_path]
+                        file_list.append(file_path)
                     else:
-                        self._blacklist[file_path] = self._blacklist[file_path] + 1
-            else:
-                file_list.append(file_path)
+                        if not file_path in self._blacklist:
+                            self._blacklist[file_path] = 1
+                        else:
+                            self._blacklist[file_path] = self._blacklist[file_path] + 1
+                else:
+                    file_list.append(file_path)
 
-            # remove files that cannot be processed
-            if len(self._blacklist) > 0:
-                remove_from_blacklist = []
-                for k in self._blacklist:
-                    if self._blacklist[k] == self.blacklist_tries:
-                        self.log("%s" % os.path.basename(k))
-                        remove_from_blacklist.append(k)
-                        try:
-                            if self.delete_input:
-                                self.log("Flagged as incomplete %d times, deleting" % self.blacklist_tries)
-                                os.remove(k)
-                            else:
-                                self.log("Flagged as incomplete %d times, skipping" % self.blacklist_tries)
-                                os.rename(k, os.path.join(self.output_dir, os.path.basename(k)))
-                        except:
-                            self.log(traceback.format_exc())
+                # remove files that cannot be processed
+                if len(self._blacklist) > 0:
+                    remove_from_blacklist = []
+                    for k in self._blacklist:
+                        if self._blacklist[k] == self.blacklist_tries:
+                            self.error("%s" % os.path.basename(k))
+                            remove_from_blacklist.append(k)
+                            try:
+                                if self.delete_input:
+                                    self.error("Flagged as incomplete %d times, deleting" % self.blacklist_tries)
+                                    os.remove(k)
+                                else:
+                                    self.error("Flagged as incomplete %d times, skipping" % self.blacklist_tries)
+                                    os.rename(k, os.path.join(self.output_dir, os.path.basename(k)))
+                            except KeyboardInterrupt:
+                                self._keyboard_interrupt()
+                                return
+                            except:
+                                self.error(traceback.format_exc())
 
-                for k in remove_from_blacklist:
-                    del self._blacklist[k]
+                    for k in remove_from_blacklist:
+                        del self._blacklist[k]
 
-            # reached limit for poll?
-            if self.max_files > 0:
-                if len(file_list) == self.max_files:
-                    self.debug("Reached maximum of %d files" % self.max_files)
-                    break
+                # reached limit for poll?
+                if self.max_files > 0:
+                    if len(file_list) == self.max_files:
+                        self.debug("Reached maximum of %d files" % self.max_files)
+                        break
 
-        self.debug("Finished listing files")
+            self.debug("Finished listing files")
+
+        except KeyboardInterrupt:
+            self._keyboard_interrupt()
+            return
+        except:
+            self.error("Failed listing files!")
+            self.error(traceback.format_exc())
+
         self.is_listing_files = False
 
         return file_list
@@ -405,61 +466,77 @@ class Poller(object):
         :type file_list: list
         """
 
-        for file_path in file_list:
-            if self.is_stopped():
-                self.log("Stopped")
-                return
-            start_time = datetime.now()
-            self.log("Start processing: %s" % file_path)
-            try:
-                if self.process_file is not None:
-                    if self.tmp_dir is not None:
-                        processed_list = self.process_file(file_path, self.tmp_dir, self)
-                        for processed_path in processed_list:
-                            self.debug("Moving processed %s to %s" % (processed_path, self.output_dir))
-                            os.rename(processed_path, os.path.join(self.output_dir, os.path.basename(processed_path)))
+        if self.is_stopped:
+            return
+
+        self.is_processing_files = True
+
+        try:
+            for file_path in file_list:
+                if self.is_stopped:
+                    self.error("Stopped")
+                    return
+
+                start_time = datetime.now()
+                self.info("Start processing: %s" % file_path)
+                try:
+                    if self.process_file is not None:
+                        if self.tmp_dir is not None:
+                            processed_list = self.process_file(file_path, self.tmp_dir, self)
+                            for processed_path in processed_list:
+                                self.debug("Moving processed %s to %s" % (processed_path, self.output_dir))
+                                os.rename(processed_path, os.path.join(self.output_dir, os.path.basename(processed_path)))
+                        else:
+                            self.process_file(file_path, self.output_dir, self)
+
+                    # input file
+                    if self.delete_input:
+                        self.debug("Deleting input: %s" % file_path)
+                        os.remove(file_path)
                     else:
-                        self.process_file(file_path, self.output_dir, self)
+                        self.debug("Moving input %s to %s" % (file_path, self.output_dir))
+                        os.rename(file_path, os.path.join(self.output_dir, os.path.basename(file_path)))
 
-                # input file
-                if self.delete_input:
-                    self.debug("Deleting input: %s" % file_path)
-                    os.remove(file_path)
-                else:
-                    self.debug("Moving input %s to %s" % (file_path, self.output_dir))
-                    os.rename(file_path, os.path.join(self.output_dir, os.path.basename(file_path)))
+                    # other input files?
+                    if self.other_input_files is not None:
+                        for other_input_file in self.other_input_files:
+                            other_files = glob.glob(os.path.join(self.input_dir, other_input_file.replace(GLOB_NAME_PLACEHOLDER, os.path.splitext(file_path)[0])))
+                            for other_file in other_files:
+                                other_path = os.path.join(self.input_dir, other_file)
+                                if self.delete_other_input_files:
+                                    self.debug("Deleting other input: %s" % other_path)
+                                    os.remove(other_path)
+                                else:
+                                    self.debug("Moving other input %s to %s" % (other_path, self.output_dir))
+                                    os.rename(other_path, os.path.join(self.output_dir, os.path.basename(other_path)))
+                except KeyboardInterrupt:
+                    self._keyboard_interrupt()
+                    return
+                except:
+                    self.error("Failed processing: %s" % file_path)
+                    self.error(traceback.format_exc())
 
-                # other input files?
-                if self.other_input_files is not None:
-                    for other_input_file in self.other_input_files:
-                        other_files = glob.glob(os.path.join(self.input_dir, other_input_file.replace(GLOB_NAME_PLACEHOLDER, os.path.splitext(file_path)[0])))
-                        for other_file in other_files:
-                            other_path = os.path.join(self.input_dir, other_file)
-                            if self.delete_other_input_files:
-                                self.debug("Deleting other input: %s" % other_path)
-                                os.remove(other_path)
-                            else:
-                                self.debug("Moving other input %s to %s" % (other_path, self.output_dir))
-                                os.rename(other_path, os.path.join(self.output_dir, os.path.basename(other_path)))
-            except KeyboardInterrupt:
-                self._stopped = True
-                self.log("Interrupted, exiting")
-                return
-            except:
-                self.log("Failed processing: %s" % file_path)
-                self.log(traceback.format_exc())
+                end_time = datetime.now()
+                processing_time = end_time - start_time
+                processing_time = int(processing_time.total_seconds() * 1000)
+                self.info("Finished processing: %d ms" % processing_time)
 
-            end_time = datetime.now()
-            processing_time = end_time - start_time
-            processing_time = int(processing_time.total_seconds() * 1000)
-            self.log("Finished processing: %d ms" % processing_time)
+        except KeyboardInterrupt:
+            self._keyboard_interrupt()
+            return
+        except:
+            self.error("Failed processing files!")
+            self.error(traceback.format_exc())
+
+        self.is_processing_files = False
+
 
     def _simple_poll(self):
         """
         Performs simple time-interval based polling.
         """
 
-        while not self.is_stopped():
+        while not self.is_stopped:
             file_list = self.list_files()
 
             # nothing found?
@@ -485,18 +562,23 @@ class Poller(object):
         try:
             count = 0
             while True:
-                count += 1
-                sleep(1)
-                if count == self.watchdog_check_interval:
-                    self.log("Watchdog check interval reached")
+                if (count == 0) or (count == self.watchdog_check_interval):
+                    if count == 0:
+                        self.info("Initial check")
+                    else:
+                        self.info("Watchdog check interval reached")
                     count = 0
                     maybe_more_files = True
                     while maybe_more_files:
+                        while self.is_busy:
+                            sleep(1)
                         file_list = self.list_files()
                         if len(file_list) < self.max_files:
                             maybe_more_files = False
                         if len(file_list) > 0:
                             self.process_files(file_list)
+                count += 1
+                sleep(1)
         finally:
             self._observer.stop()
             self._observer.join()
@@ -510,20 +592,20 @@ class Poller(object):
         self._blacklist.clear()
         self._check()
 
-        if self.verbose:
-            self.log("Polling parameters")
-            self.log("- Input dir: %s" % self.input_dir)
-            self.log("- Output dir: %s" % self.output_dir)
-            if self.tmp_dir is not None:
-                self.log("- Temp dir: %s" % self.output_dir)
-            if self.extensions is not None:
-                self.log("- Extensions: %s" % str(self.extensions))
-            self.log("- Continuous: %s" % str(self.continuous))
-            self.log("- Watchdog: %s" % str(self.use_watchdog))
-            if self.use_watchdog:
-                self.log("- Watchdog check interval: %d seconds" % self.watchdog_check_interval)
-            else:
-                self.log("- Poll wait interval: %d seconds" % self.poll_wait)
+        # output parameters
+        self.debug("Polling parameters")
+        self.debug("- Input dir: %s" % self.input_dir)
+        self.debug("- Output dir: %s" % self.output_dir)
+        if self.tmp_dir is not None:
+            self.debug("- Temp dir: %s" % self.output_dir)
+        if self.extensions is not None:
+            self.debug("- Extensions: %s" % str(self.extensions))
+        self.debug("- Continuous: %s" % str(self.continuous))
+        self.debug("- Watchdog: %s" % str(self.use_watchdog))
+        if self.use_watchdog:
+            self.debug("- Watchdog check interval: %d seconds" % self.watchdog_check_interval)
+        else:
+            self.debug("- Poll wait interval: %d seconds" % self.poll_wait)
 
         if self.use_watchdog:
             self._watchdog_poll()

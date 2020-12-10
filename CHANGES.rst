@@ -1,6 +1,15 @@
 Changelog
 =========
 
+0.0.6 (2020-12-10)
+------------------
+
+- fixed race condition between watchdog reacting to new files and watchdog checking for files at specific intervals
+- logging now distinguishes between DEBUG/INFO/ERROR levels
+- keyboard interrupts via CTRL+C are now handled correctly
+- in watchdog mode, an initial scan of the input directory is now performed, in case files were already present
+
+
 0.0.5 (2020-12-10)
 ------------------
 

@@ -121,10 +121,11 @@ print("Stopped?", p.is_stopped())
 ## Custom logging
 
 By suppplying a method to the `logging` option, you can custom the logging
-that occurs. The example below uses the Python logging framework.  
+that occurs via the `info`, `debug` and `error` method calls of the Poller. 
+The example below uses the Python logging framework.  
 
 ```python
-from sfp import Poller
+from sfp import Poller, LOGGING_TYPE_INFO, LOGGING_TYPE_DEBUG, LOGGING_TYPE_ERROR
 import logging
 
 _logger = None
@@ -135,7 +136,12 @@ def custom_logging(*args):
         _logger = logging.getLogger("sfp")
         _logger.setLevel(logging.DEBUG)
     str_args = [str(x) for x in args]
-    _logger.info(" ".join(str_args))
+    if type == LOGGING_TYPE_ERROR:
+        _logger.error(" ".join(str_args))
+    elif type == LOGGING_TYPE_DEBUG:
+        _logger.debug(" ".join(str_args))
+    else:
+        _logger.info(" ".join(str_args))
 
 p = Poller()
 # ... setting more options
