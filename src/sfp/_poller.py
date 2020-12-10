@@ -292,7 +292,7 @@ class Poller(object):
             else:
                 self._logging(type, *args)
 
-    def _keyboard_interrupt(self):
+    def keyboard_interrupt(self):
         """
         Prints an error message and stops the polling.
         """
@@ -431,7 +431,7 @@ class Poller(object):
                                     self.error("Flagged as incomplete %d times, skipping" % self.blacklist_tries)
                                     os.rename(k, os.path.join(self.output_dir, os.path.basename(k)))
                             except KeyboardInterrupt:
-                                self._keyboard_interrupt()
+                                self.keyboard_interrupt()
                                 return
                             except:
                                 self.error(traceback.format_exc())
@@ -448,7 +448,7 @@ class Poller(object):
             self.debug("Finished listing files")
 
         except KeyboardInterrupt:
-            self._keyboard_interrupt()
+            self.keyboard_interrupt()
             return
         except:
             self.error("Failed listing files!")
@@ -510,7 +510,7 @@ class Poller(object):
                                     self.debug("Moving other input %s to %s" % (other_path, self.output_dir))
                                     os.rename(other_path, os.path.join(self.output_dir, os.path.basename(other_path)))
                 except KeyboardInterrupt:
-                    self._keyboard_interrupt()
+                    self.keyboard_interrupt()
                     return
                 except:
                     self.error("Failed processing: %s" % file_path)
@@ -522,7 +522,7 @@ class Poller(object):
                 self.info("Finished processing: %d ms" % processing_time)
 
         except KeyboardInterrupt:
-            self._keyboard_interrupt()
+            self.keyboard_interrupt()
             return
         except:
             self.error("Failed processing files!")
