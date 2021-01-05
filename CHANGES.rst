@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.0.9 (2021-01-05)
+------------------
+
+- the `Poller.logging` property no longer returns the `check_file` method
+
+
 0.0.8 (2020-12-11)
 ------------------
 
