@@ -120,7 +120,7 @@ print("Stopped?", p.is_stopped())
 
 ## Custom logging
 
-By supplying a method to the `logging` option, you can custom the logging
+By supplying a method to the `logging` option, you can customize the logging
 that occurs via the `info`, `debug` and `error` method calls of the Poller. 
 The example below uses the Python logging framework.  
 
