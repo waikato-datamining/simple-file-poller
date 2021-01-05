@@ -206,7 +206,7 @@ class Poller(object):
         :return: the method in use
         :rtype: function
         """
-        return self._check_file
+        return self._logging
 
     @logging.setter
     def logging(self, fn):
