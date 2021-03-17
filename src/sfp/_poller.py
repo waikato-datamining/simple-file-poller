@@ -60,12 +60,12 @@ LOGGING_TYPE_DEBUG = 2
 LOGGING_TYPE_ERROR = 3
 
 
-def simple_logging(type, *args):
+def simple_logging(logging_type, *args):
     """
     Just uses the print method to output the arguments.
 
-    :param type: the message type
-    :type type: int
+    :param logging_type: the logging type
+    :type logging_type: int
     :param args: the arguments to output
     """
     print(*args)
@@ -125,7 +125,7 @@ class Poller(object):
     def __init__(self, input_dir=None, output_dir=None, tmp_dir=None, delete_input=False, continuous=False,
                  max_files=-1, extensions=None, other_input_files=None, delete_other_input_files=False,
                  blacklist_tries=3, poll_wait=1.0, use_watchdog=False, watchdog_check_interval=10.0,
-                 verbose=False, progress=True, output_timestamp=True,
+                 verbose=False, progress=True, output_timestamp=True, output_num_files=False,
                  check_file=None, process_file=None, logging=simple_logging, params=Parameters()):
         """
 
@@ -161,6 +161,8 @@ class Poller(object):
         :type progress: bool
         :param output_timestamp: whether to print a timestamp in the log messages
         :type output_timestamp: bool
+        :param output_num_files: whether to output the number of files that are being processed ("x/y")
+        :type output_num_files: bool
         :param check_file: the method to call for checking the files for validity
         :type check_file: object
         :param process_file: the method to call for processing a file
@@ -187,6 +189,7 @@ class Poller(object):
         self.verbose = verbose
         self.progress = progress
         self.output_timestamp = output_timestamp
+        self.output_num_files = output_num_files
         self.check_file = check_file
         self.process_file = process_file
         self.logging = logging
@@ -284,17 +287,19 @@ class Poller(object):
         """
         self._log(LOGGING_TYPE_ERROR, *args)
 
-    def _log(self, type, *args):
+    def _log(self, logging_type, *args):
         """
         Outputs the arguments via the logging function.
 
+        :param logging_type: the logging type
+        :type logging_type: int
         :param args: the arguments to output
         """
         if self._logging is not None:
             if self.output_timestamp:
-                self._logging(type, *("%s - " % str(datetime.now()), *args))
+                self._logging(logging_type, *("%s - " % str(datetime.now()), *args))
             else:
-                self._logging(type, *args)
+                self._logging(logging_type, *args)
 
     def keyboard_interrupt(self):
         """
@@ -413,7 +418,7 @@ class Poller(object):
                             del self._blacklist[file_path]
                         file_list.append(file_path)
                     else:
-                        if not file_path in self._blacklist:
+                        if file_path not in self._blacklist:
                             self._blacklist[file_path] = 1
                         else:
                             self._blacklist[file_path] = self._blacklist[file_path] + 1
@@ -474,15 +479,20 @@ class Poller(object):
             return
 
         self.is_processing_files = True
+        num_files = len(file_list)
 
         try:
-            for file_path in file_list:
+            for i, file_path in enumerate(file_list):
                 if self.is_stopped:
                     self.error("Stopped")
                     return
 
                 start_time = datetime.now()
-                self.info("Start processing: %s" % file_path)
+                if self.output_num_files:
+                    num_files_str = " %d/%d" % ((i + 1), num_files)
+                else:
+                    num_files_str = ""
+                self.info("Start processing%s: %s" % (num_files_str, file_path))
                 try:
                     if self.process_file is not None:
                         if self.tmp_dir is not None:
@@ -495,10 +505,10 @@ class Poller(object):
 
                     # input file
                     if self.delete_input:
-                        self.debug("Deleting input: %s" % file_path)
+                        self.debug("Deleting input%s: %s" % (num_files_str, file_path))
                         os.remove(file_path)
                     else:
-                        self.debug("Moving input %s to %s" % (file_path, self.output_dir))
+                        self.debug("Moving input%s: %s -> %s" % (num_files_str, file_path, self.output_dir))
                         os.rename(file_path, os.path.join(self.output_dir, os.path.basename(file_path)))
 
                     # other input files?
@@ -508,22 +518,22 @@ class Poller(object):
                             for other_file in other_files:
                                 other_path = os.path.join(self.input_dir, other_file)
                                 if self.delete_other_input_files:
-                                    self.debug("Deleting other input: %s" % other_path)
+                                    self.debug("Deleting other input%s: %s" % (num_files_str, other_path))
                                     os.remove(other_path)
                                 else:
-                                    self.debug("Moving other input %s to %s" % (other_path, self.output_dir))
+                                    self.debug("Moving other input%s: %s -> %s" % (num_files_str, other_path, self.output_dir))
                                     os.rename(other_path, os.path.join(self.output_dir, os.path.basename(other_path)))
                 except KeyboardInterrupt:
                     self.keyboard_interrupt()
                     return
                 except:
-                    self.error("Failed processing: %s" % file_path)
+                    self.error("Failed processing%s: %s" % (num_files_str, file_path))
                     self.error(traceback.format_exc())
 
                 end_time = datetime.now()
                 processing_time = end_time - start_time
                 processing_time = int(processing_time.total_seconds() * 1000)
-                self.info("Finished processing: %d ms" % processing_time)
+                self.info("Finished processing%s: %d ms" % (num_files_str, processing_time))
 
         except KeyboardInterrupt:
             self.keyboard_interrupt()
@@ -533,7 +543,6 @@ class Poller(object):
             self.error(traceback.format_exc())
 
         self.is_processing_files = False
-
 
     def _simple_poll(self):
         """
