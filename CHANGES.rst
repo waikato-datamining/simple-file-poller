@@ -1,6 +1,13 @@
 Changelog
 =========
 
+0.0.10 (2021-03-18)
+-------------------
+
+- added the `output_num_files` boolean property to the `Poller` class, which extends the logging output by
+  outputting a `x/y` string as well (x=current file index, y=total number of files in a batch)
+
+
 0.0.9 (2021-01-05)
 ------------------
 
