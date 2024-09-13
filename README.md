@@ -118,6 +118,13 @@ p.poll()
 print("Stopped?", p.is_stopped())
 ```
 
+**NB:** Install the [python-image-complete](https://github.com/waikato-datamining/python-image-complete) 
+library with:
+
+```bash
+pip install python-image-complete
+```
+
 ## Custom logging
 
 By supplying a method to the `logging` option, you can customize the logging
