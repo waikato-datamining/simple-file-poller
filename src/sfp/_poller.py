@@ -1,5 +1,6 @@
 import glob
 import os
+import shutil
 import traceback
 from typing import Callable, List
 from datetime import datetime
@@ -438,7 +439,7 @@ class Poller(object):
                                     os.remove(k)
                                 else:
                                     self.error("Flagged as incomplete %d times, skipping" % self.blacklist_tries)
-                                    os.rename(k, os.path.join(self.output_dir, os.path.basename(k)))
+                                    shutil.move(k, os.path.join(self.output_dir, os.path.basename(k)))
                             except KeyboardInterrupt:
                                 self.keyboard_interrupt()
                                 return
@@ -499,7 +500,7 @@ class Poller(object):
                             processed_list = self.process_file(file_path, self.tmp_dir, self)
                             for processed_path in processed_list:
                                 self.debug("Moving processed %s to %s" % (processed_path, self.output_dir))
-                                os.rename(processed_path, os.path.join(self.output_dir, os.path.basename(processed_path)))
+                                shutil.move(processed_path, os.path.join(self.output_dir, os.path.basename(processed_path)))
                         else:
                             self.process_file(file_path, self.output_dir, self)
 
@@ -509,7 +510,7 @@ class Poller(object):
                         os.remove(file_path)
                     else:
                         self.debug("Moving input%s: %s -> %s" % (num_files_str, file_path, self.output_dir))
-                        os.rename(file_path, os.path.join(self.output_dir, os.path.basename(file_path)))
+                        shutil.move(file_path, os.path.join(self.output_dir, os.path.basename(file_path)))
 
                     # other input files?
                     if self.other_input_files is not None:
@@ -522,7 +523,7 @@ class Poller(object):
                                     os.remove(other_path)
                                 else:
                                     self.debug("Moving other input%s: %s -> %s" % (num_files_str, other_path, self.output_dir))
-                                    os.rename(other_path, os.path.join(self.output_dir, os.path.basename(other_path)))
+                                    shutil.move(other_path, os.path.join(self.output_dir, os.path.basename(other_path)))
                 except KeyboardInterrupt:
                     self.keyboard_interrupt()
                     return

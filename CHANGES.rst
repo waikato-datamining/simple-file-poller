@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.0.11 (????-??-??)
+-------------------
+
+- using `shutil.move` instead of `os.rename` to work across file-system boundaries
+
+
 0.0.10 (2021-03-18)
 -------------------
 
