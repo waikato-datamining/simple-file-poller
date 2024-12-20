@@ -6,7 +6,7 @@ Simple Python 3 library for file polling.
 Install via pip:
 
 ```
-pip install simple-file-poller
+pip install simple_file_poller
 ```
 
 ## Usage
