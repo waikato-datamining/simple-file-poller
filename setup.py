@@ -16,7 +16,7 @@ def _read(f):
 
 
 setup(
-    name="simple-file-poller",
+    name="simple_file_poller",
     description="Simple Python 3 library for file polling.",
     long_description=(
         _read('DESCRIPTION.rst') + b'\n' +
