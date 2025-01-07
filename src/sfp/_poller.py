@@ -56,6 +56,34 @@ def dummy_file_processing(fname, output_dir, poller):
     return result
 
 
+def dummy_batch_processing(fnames, output_dir, poller):
+    """
+    Dummy batch file processing method. Simply create files with the ".done" extension in the output directory
+    containing the original input file name.
+
+    :param fnames: the list of files to process
+    :type fnames: list
+    :param output_dir: the output directory for writing additional files to
+    :type output_dir: str
+    :param poller: the poller triggered the processing
+    :type poller: Poller
+    :return: the list of files that were generated (absolute path names)
+    :rtype: list
+    """
+    result = []
+
+    for fname in fnames:
+        poller.debug("Processing:", fname)
+
+        out_fname = os.path.join(output_dir, os.path.basename(fname) + ".done")
+        with open(out_fname, "w") as of:
+            of.write(fname)
+
+        result.append(out_fname)
+
+    return result
+
+
 LOGGING_TYPE_INFO = 1
 LOGGING_TYPE_DEBUG = 2
 LOGGING_TYPE_ERROR = 3
@@ -127,7 +155,8 @@ class Poller(object):
                  max_files=-1, extensions=None, other_input_files=None, delete_other_input_files=False,
                  blacklist_tries=3, poll_wait=1.0, use_watchdog=False, watchdog_check_interval=10.0,
                  verbose=False, progress=True, output_timestamp=True, output_num_files=False,
-                 check_file=None, process_file=None, logging=simple_logging, params=Parameters()):
+                 check_file=None, process_file=None, process_batch=None, batch_size=1,
+                 logging=simple_logging, params=Parameters()):
         """
 
         :param input_dir: The directory to poll for files to process.
@@ -166,8 +195,12 @@ class Poller(object):
         :type output_num_files: bool
         :param check_file: the method to call for checking the files for validity
         :type check_file: object
-        :param process_file: the method to call for processing a file
+        :param process_file: the method to call for processing a single file
         :type process_file: object
+        :param process_batch: the method to call for processing a batch of files
+        :type process_batch: object
+        :param batch_size: the number of files to process in one go; for bs==1 a 'process_file' method must be supplied and for bs>1 a 'process_batch' method
+        :type batch_size: int
         :param logging: the method to use for logging
         :type logging: object
         :param params: the object for encapsulating additional parameters for the check_file/process_file methods
@@ -193,6 +226,8 @@ class Poller(object):
         self.output_num_files = output_num_files
         self.check_file = check_file
         self.process_file = process_file
+        self.process_batch = process_batch
+        self.batch_size = batch_size
         self.logging = logging
         self.is_listing_files = False
         self.is_processing_files = False
@@ -261,6 +296,26 @@ class Poller(object):
         :type fn: function
         """
         self._process_file = fn
+
+    @property
+    def process_batch(self):
+        """
+        Returns the process batch method.
+
+        :return: the method in use
+        :rtype: function
+        """
+        return self._process_batch
+
+    @process_batch.setter
+    def process_batch(self, fn: Callable[[List[str], str, "Poller"], List[str]]):
+        """
+        Sets the process batch function.
+
+        :param fn: the method to use
+        :type fn: function
+        """
+        self._process_batch = fn
 
     def debug(self, *args):
         """
@@ -483,19 +538,25 @@ class Poller(object):
         num_files = len(file_list)
 
         try:
-            for i, file_path in enumerate(file_list):
+            i = 0
+            for n in range(0, len(file_list), self.batch_size):
+                sub_file_list = file_list[n:n + self.batch_size]
+                i += len(sub_file_list)
+
                 if self.is_stopped:
                     self.error("Stopped")
                     return
 
                 start_time = datetime.now()
                 if self.output_num_files:
-                    num_files_str = " %d/%d" % ((i + 1), num_files)
+                    num_files_str = " %d/%d" % (i, num_files)
                 else:
                     num_files_str = ""
-                self.info("Start processing%s: %s" % (num_files_str, file_path))
+                self.info("Start processing%s: %s" % (num_files_str, ", ".join(sub_file_list)))
                 try:
-                    if self.process_file is not None:
+                    # one file at a time
+                    if (self.batch_size == 1) and (self.process_file is not None):
+                        file_path = sub_file_list[0]
                         if self.tmp_dir is not None:
                             processed_list = self.process_file(file_path, self.tmp_dir, self)
                             for processed_path in processed_list:
@@ -503,32 +564,44 @@ class Poller(object):
                                 shutil.move(processed_path, os.path.join(self.output_dir, os.path.basename(processed_path)))
                         else:
                             self.process_file(file_path, self.output_dir, self)
+                    # batch processing
+                    elif (self.batch_size > 1) and (self.process_batch is not None):
+                        if self.tmp_dir is not None:
+                            processed_list = self.process_batch(sub_file_list, self.tmp_dir, self)
+                            for processed_path in processed_list:
+                                self.debug("Moving processed %s to %s" % (processed_path, self.output_dir))
+                                shutil.move(processed_path, os.path.join(self.output_dir, os.path.basename(processed_path)))
+                        else:
+                            self.process_batch(sub_file_list, self.output_dir, self)
 
                     # input file
                     if self.delete_input:
-                        self.debug("Deleting input%s: %s" % (num_files_str, file_path))
-                        os.remove(file_path)
+                        for file_path in sub_file_list:
+                            self.debug("Deleting input: %s" % file_path)
+                            os.remove(file_path)
                     else:
-                        self.debug("Moving input%s: %s -> %s" % (num_files_str, file_path, self.output_dir))
-                        shutil.move(file_path, os.path.join(self.output_dir, os.path.basename(file_path)))
+                        for file_path in sub_file_list:
+                            self.debug("Moving input: %s -> %s" % (file_path, self.output_dir))
+                            shutil.move(file_path, os.path.join(self.output_dir, os.path.basename(file_path)))
 
                     # other input files?
                     if self.other_input_files is not None:
-                        for other_input_file in self.other_input_files:
-                            other_files = glob.glob(os.path.join(self.input_dir, other_input_file.replace(GLOB_NAME_PLACEHOLDER, os.path.splitext(file_path)[0])))
-                            for other_file in other_files:
-                                other_path = os.path.join(self.input_dir, other_file)
-                                if self.delete_other_input_files:
-                                    self.debug("Deleting other input%s: %s" % (num_files_str, other_path))
-                                    os.remove(other_path)
-                                else:
-                                    self.debug("Moving other input%s: %s -> %s" % (num_files_str, other_path, self.output_dir))
-                                    shutil.move(other_path, os.path.join(self.output_dir, os.path.basename(other_path)))
+                        for file_path in sub_file_list:
+                            for other_input_file in self.other_input_files:
+                                other_files = glob.glob(os.path.join(self.input_dir, other_input_file.replace(GLOB_NAME_PLACEHOLDER, os.path.splitext(file_path)[0])))
+                                for other_file in other_files:
+                                    other_path = os.path.join(self.input_dir, other_file)
+                                    if self.delete_other_input_files:
+                                        self.debug("Deleting other input: %s" % other_path)
+                                        os.remove(other_path)
+                                    else:
+                                        self.debug("Moving other input: %s -> %s" % (other_path, self.output_dir))
+                                        shutil.move(other_path, os.path.join(self.output_dir, os.path.basename(other_path)))
                 except KeyboardInterrupt:
                     self.keyboard_interrupt()
                     return
                 except:
-                    self.error("Failed processing%s: %s" % (num_files_str, file_path))
+                    self.error("Failed processing%s: %s" % (num_files_str, ", ".join(sub_file_list)))
                     self.error(traceback.format_exc())
 
                 end_time = datetime.now()
@@ -562,6 +635,8 @@ class Poller(object):
                 else:
                     self.debug("No files found, exiting")
                 break
+            else:
+                self.info("# files located: %d" % len(file_list))
 
             self.process_files(file_list)
 

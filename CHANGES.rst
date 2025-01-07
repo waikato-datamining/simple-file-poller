@@ -5,6 +5,7 @@ Changelog
 -------------------
 
 - switched to underscores in project name
+- added support for batch processing of files
 
 
 0.0.11 (2024-09-13)

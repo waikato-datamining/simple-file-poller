@@ -115,7 +115,7 @@ p = Poller(
     extensions=[".jpg", ".png"],
     params=params)
 p.poll()
-print("Stopped?", p.is_stopped())
+print("Stopped?", p.is_stopped)
 ```
 
 **NB:** Install the [python-image-complete](https://github.com/waikato-datamining/python-image-complete) 
@@ -132,7 +132,7 @@ that occurs via the `info`, `debug` and `error` method calls of the Poller.
 The example below uses the Python logging framework.  
 
 ```python
-from sfp import Poller, LOGGING_TYPE_INFO, LOGGING_TYPE_DEBUG, LOGGING_TYPE_ERROR
+from sfp import Poller, LOGGING_TYPE_DEBUG, LOGGING_TYPE_ERROR
 import logging
 
 _logger = None
@@ -155,4 +155,35 @@ p = Poller()
 p.logging = custom_logging
 p.output_timestamp = False # the Python logging framework should handle that instead
 p.poll()
+```
+
+
+## Batch processing
+
+Instead of processing one file at a time, it is also possible to perform
+batch processing. Instead of supplying a method via the `process_file`
+argument, you need to use `process_batch` instead. This method must process
+a list of file names as the first parameter, the others are the same as for
+`process_file`. You also need to specify the batch size via the `batch_size`
+parameter. Below is an example:
+
+
+```python
+from sfp import Poller, Parameters, dummy_batch_processing
+
+params = Parameters()
+params.dont_check_ext = [".png"]
+
+p = Poller(
+    input_dir="/home/fracpete/poll/in/",
+    output_dir="/home/fracpete/poll/out/",
+    tmp_dir="/home/fracpete/poll/tmp/",
+    continuous=True,
+    max_files=100,
+    batch_size=5,
+    process_batch=dummy_batch_processing,
+    extensions=[".jpg", ".png"],
+    params=params)
+p.poll()
+print("Stopped?", p.is_stopped)
 ```
