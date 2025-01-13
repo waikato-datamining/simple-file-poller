@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.0.13 (2025-01-14)
+-------------------
+
+- added *stop file* support, i.e., when this file appears the poller will stop polling
+
+
 0.0.12 (2025-01-07)
 -------------------
 

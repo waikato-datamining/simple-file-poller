@@ -155,7 +155,7 @@ class Poller(object):
                  max_files=-1, extensions=None, other_input_files=None, delete_other_input_files=False,
                  blacklist_tries=3, poll_wait=1.0, use_watchdog=False, watchdog_check_interval=10.0,
                  verbose=False, progress=True, output_timestamp=True, output_num_files=False,
-                 check_file=None, process_file=None, process_batch=None, batch_size=1,
+                 check_file=None, process_file=None, process_batch=None, batch_size=1, stop_file=None,
                  logging=simple_logging, params=Parameters()):
         """
 
@@ -201,6 +201,8 @@ class Poller(object):
         :type process_batch: object
         :param batch_size: the number of files to process in one go; for bs==1 a 'process_file' method must be supplied and for bs>1 a 'process_batch' method
         :type batch_size: int
+        :param stop_file: the name of the file (no path) that will cause the poller to exit its polling when it appears, ignored if None
+        :type stop_file: str
         :param logging: the method to use for logging
         :type logging: object
         :param params: the object for encapsulating additional parameters for the check_file/process_file methods
@@ -228,6 +230,7 @@ class Poller(object):
         self.process_file = process_file
         self.process_batch = process_batch
         self.batch_size = batch_size
+        self.stop_file = stop_file
         self.logging = logging
         self.is_listing_files = False
         self.is_processing_files = False
@@ -353,7 +356,7 @@ class Poller(object):
         """
         if self._logging is not None:
             if self.output_timestamp:
-                self._logging(logging_type, *("%s - " % str(datetime.now()), *args))
+                self._logging(logging_type, *("%s -" % str(datetime.now()), *args))
             else:
                 self._logging(logging_type, *args)
 
@@ -449,9 +452,15 @@ class Poller(object):
 
         try:
             for file_name in os.listdir(self.input_dir):
+                # stop file encountered?
+                if self.stop_file is not None:
+                    if file_name == self.stop_file:
+                        self.info("Stop file encountered: %s" % self.stop_file)
+                        self.stop()
+
                 if self.is_stopped:
                     self.info("Stopped")
-                    return
+                    return None
 
                 file_path = os.path.join(self.input_dir, file_name)
 
@@ -625,20 +634,20 @@ class Poller(object):
 
         while not self.is_stopped:
             file_list = self.list_files()
-
-            # nothing found?
-            if len(file_list) == 0:
-                if self.continuous:
-                    self.debug("Waiting %d seconds before next poll" % self.poll_wait)
-                    sleep(self.poll_wait)
-                    continue
+            if file_list is not None:
+                # nothing found?
+                if len(file_list) == 0:
+                    if self.continuous:
+                        self.debug("Waiting %d seconds before next poll" % self.poll_wait)
+                        sleep(self.poll_wait)
+                        continue
+                    else:
+                        self.debug("No files found, exiting")
+                    break
                 else:
-                    self.debug("No files found, exiting")
-                break
-            else:
-                self.info("# files located: %d" % len(file_list))
+                    self.info("# files located: %d" % len(file_list))
 
-            self.process_files(file_list)
+                self.process_files(file_list)
 
     def _watchdog_poll(self):
         """
@@ -666,11 +675,12 @@ class Poller(object):
                                 self.debug("Poller busy, waiting...")
                             sleep(0.1)
                         file_list = self.list_files()
-                        num_files = len(file_list)
-                        if (num_files == 0) or (num_files < self.max_files):
-                            maybe_more_files = False
-                        if num_files > 0:
-                            self.process_files(file_list)
+                        if file_list is not None:
+                            num_files = len(file_list)
+                            if (num_files == 0) or (num_files < self.max_files):
+                                maybe_more_files = False
+                            if num_files > 0:
+                                self.process_files(file_list)
                 count += 0.1
                 sleep(0.1)
         finally:

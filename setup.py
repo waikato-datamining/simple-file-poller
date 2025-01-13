@@ -38,7 +38,7 @@ setup(
     install_requires=[
         "watchdog",
     ],
-    version="0.0.12",
+    version="0.0.13",
     author='Peter Reutemann',
     author_email='fracpete@waikato.ac.nz',
 )

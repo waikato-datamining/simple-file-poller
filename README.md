@@ -77,6 +77,11 @@ The `params` object can be used to attach parameters that are used by the
 object you avoid the danger of accidentally replacing attributes that
 were introduced in the Poller class at a later stage.
 
+With the `stop_file` parameter you can specify a particular file name which
+will direct the Poller to stop listing files and stop operation (off by default).
+That way, it is possible to stop polling gracefully via a simple file in the 
+`input` directory.
+
 ## Custom file check
 
 The following example looks for JPG and PNG files in `/home/fracpete/poll/in/` and will
